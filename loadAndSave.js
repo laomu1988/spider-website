@@ -42,10 +42,10 @@ function loadAndSave(loadObj) {
         request.get({url: encodeURI(url), gzip: false, headers: headers})
             .on('response', function (response) {
                 if (response.statusCode == 200) {
-                    console.log('loadimg success');
+                    // console.log('loadimg success');
                     loadObj.loaded = true;
                 } else {
-                    console.log('loadimgfailure:', response.statusCode);
+                    console.log('loadailure:', response.statusCode, encodeURI(url));
                     setTimeout(function () {
                         fs.unlinkSync(saveTo);
                     }, 5000);
@@ -54,12 +54,12 @@ function loadAndSave(loadObj) {
                 }
             })
             .on('error', function (err) {
-                console.log('loadimgerr:', err);
+                console.log('loadimgerr:', err, encodeURI(url));
                 loadObj.failure = true;
                 reject(loadObj);
             })
             .on('end', function () {
-                console.log('loadimg end');
+                // console.log('loadimg end');
                 setTimeout(function () {
                     resolve(loadObj);
                 }, 20);

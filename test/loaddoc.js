@@ -36,5 +36,5 @@ var config = {
     }
 };
 
-spider.config(config);
+spider.init(config);
 spider.load('https://nodejs.org/dist/latest-v4.x/docs/api/index.html');
