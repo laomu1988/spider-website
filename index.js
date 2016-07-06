@@ -4,6 +4,7 @@ var cheerio = require("cheerio"); // cherrio是用jquery的语法来解析html
 var fs = require('fs');
 var Url = require('url');
 var Path = require('path');
+var process = require('process');
 var Iconv = require('iconv').Iconv;
 var _ = require('lodash');
 var loadAndSave = require('./loadAndSave.js');
@@ -163,12 +164,27 @@ function LoadNext() {
         LoadingNum += 1;
         loadAndSave(loadObj).then(onLoad, onLoad);
     }
-    if (list.length == 0 && LoadingNum == 0 && typeof config.onFinish === 'function') {
-        config.onFinish();
+    //console.log('num:',LoadingNum);
+    if (list.length == 0 && LoadingNum == 0) {
+        console.log('全部下载完毕！     ');
+        if (typeof config.onFinish === 'function') {
+            try {
+                config.onFinish();
+            } catch (e) {
+                console.log(e);
+            }
+        }
+    }
+    if (list.length == 0 && LoadingNum == 0) {
+        console.log('退出程序！     ');
+        process.abort();
+        return;
+    }
+    if (list.length == 0 && LoadingNum != 0) {
+        console.log('waiting loading: ', LoadingNum);
     }
 }
 
-LoadNext();
 module.exports = {
     init: function (_config) {
         config = _.extend(config, _config);

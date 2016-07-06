@@ -15,8 +15,13 @@ var exts = {
 
 var otherLink = [];
 var config = {
-    deep: 1,
+    deep: 2,
     saveTo: __dirname + '/node4/',
+    beforePush: function (link) {
+        if (link.indexOf("dist/latest-v6.x") < 0) {
+            return false;
+        }
+    },
     beforeLoad: function (loadObj) {
         //console.log(loadObj);
         console.log('beforeLoad:', loadObj.link, loadObj.ext);
@@ -32,9 +37,9 @@ var config = {
     },
     onFinish: function () {
         console.log('otherLink:', otherLink);
-        fs.writeFileSync(_dirname + '/otherLink.json', JSON.stringify(otherLink));
+        fs.writeFileSync(__dirname + '/otherLink.json', JSON.stringify(otherLink));
     }
 };
 
 spider.init(config);
-spider.load('https://nodejs.org/dist/latest-v4.x/docs/api/index.html');
+spider.load('https://nodejs.org/dist/latest-v6.x/docs/api/index.html');
