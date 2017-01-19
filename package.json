@@ -2,7 +2,10 @@
   "name": "spider-website",
   "version": "1.0.0",
   "description": "spider website",
-  "main": "index.js",
+  "main": "lib/spider.js",
+  "bin": {
+    "spider": "./bin/spider.js"
+  },
   "scripts": {
     "test": "standard && mocha",
     "push": "nrm use npm && npm version patch && npm publish",
@@ -21,7 +24,8 @@
     "lodash": "^4.13.1",
     "lowdb": "^0.14.0",
     "mk-dir": "^1.0.1",
-    "request": "^2.72.0"
+    "request": "^2.72.0",
+    "yargs": "^6.6.0"
   },
   "author": "laomu1988@qq.com",
   "license": "MIT"
