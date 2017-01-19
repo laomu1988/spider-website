@@ -1,19 +1,20 @@
 'use strict';
-var request = require("request"); // request是用来请求数据
 var cheerio = require("cheerio"); // cherrio是用jquery的语法来解析html
 var fs = require('fs');
 var Url = require('url');
 var Path = require('path');
-var process = require('process');
 var Iconv = require('iconv').Iconv;
 var _ = require('lodash');
-var loadAndSave = require('./loadAndSave.js');
+var loadAndSave = require('./lib/loadAndSave.js');
+var low = require('lowdb');
 
 var list = [];
 var added = {};
 var config = {
+    temp: 'spider.json',
     autoName: 'index.html', // 自动增加扩展名
     saveTo: __dirname + '/test/', // 下载文件保存路径
+    saveReplace: '',// 保存时仅保存该路径下内容
     deep: 10,
     speed: 10,
     isGBK: false, // 是否是gbk编码
@@ -22,15 +23,14 @@ var config = {
     onLoad: false, // 下载文件成功后调用
     onFail: false // 下载文件失败后调用
 };
-
+var db = low('spider.json');
+db.defaults({config: config, list: []});
+/**
+ * 计算html文件包含的链接
+ * */
 function getLinks(obj) {
     var filename = obj.saveTo, url = obj.link, deep = obj.deep || 1;
-    if (obj.deep >= config.deep) {
-        return;
-    }
-    if (filename.indexOf('.html') < 0) {
-        return;
-    }
+    if (obj.deep >= config.deep || filename.indexOf('.html') < 0) return;
     try {
         if (config.isGBK) {
             var gbk_to_utf8 = new Iconv('GBK', 'UTF8');
@@ -77,7 +77,6 @@ function getLinks(obj) {
     } catch (e) {
         console.log('getLinksError:', e);
     }
-
 }
 
 function pushLink(link, old) {
@@ -126,13 +125,25 @@ function pushLink(link, old) {
         ext = Path.extname(config.autoName);
     }
     obj.ext = ext;
-    obj.saveTo = (config.saveTo + obj.pathname).replace('//', '/');
+    if (!config.saveReplace) {
+        obj.saveTo = (config.saveTo + obj.pathname).replace('//', '/');
+    } else {
+        console.log('pathname:', obj.pathname, config.saveReplace);
+        var index = obj.pathname.indexOf(config.saveReplace);
+        if (index == 0) {
+            obj.pathname = obj.pathname.substr(config.saveReplace.length - 1);
+            obj.saveTo = (config.saveTo + obj.pathname).replace('//', '/');
+        } else {
+            return;
+        }
+    }
     obj.deep = typeof old.deep == 'undefined' ? 0 : obj.deep + 1 || 1;
 
     if (obj.deep == config.deep && obj.ext == '.html') {
         return;
     }
     list.push(obj);
+    db.get('list').push(obj).value();
     added[link] = obj;
     return obj.pathname;
 }
@@ -162,7 +173,11 @@ function LoadNext() {
             continue;
         }
         LoadingNum += 1;
-        loadAndSave(loadObj).then(onLoad, onLoad);
+        loadAndSave(loadObj).then(function () {
+
+        }, function () {
+
+        });
     }
     //console.log('num:',LoadingNum);
     if (list.length == 0 && LoadingNum == 0) {
@@ -185,13 +200,31 @@ function LoadNext() {
     }
 }
 
+
+process.on('exit', function () {
+    console.log('exit');
+});
+process.on('beforeExit', function () {
+    console.log('beforeExit');
+});
+
 module.exports = {
     init: function (_config) {
         config = _.extend(config, _config);
         // console.log(config);
+        var old_config = db.get('config');
+        if (JSON.stringify(old_config) != JSON.stringify(config)) {
+            // 配置更新后,清空下载列表
+            db.set('config', config).value();
+            db.set('list', []).value();
+            db.write();
+        }
     },
-    pushLink: function (url) {
+    pushLink (url) {
         pushLink(url, 0);
+    },
+    getNext(){
+
     },
     load: function (url) {
         pushLink(url, 0);

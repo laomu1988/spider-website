@@ -1,6 +1,5 @@
 var request = require('request');
 var mkdir = require('mk-dir');
-var Url = require('url');
 var fs = require('fs');
 /*
  var config = {
@@ -39,11 +38,13 @@ function loadAndSave(loadObj) {
             console.log(e);
         }
 
-        request.get({url: encodeURI(url), gzip: false, headers: headers})
+        request.get({url: encodeURI(url), gzip: false, headers: headers, encoding: null})
             .on('response', function (response) {
                 if (response.statusCode == 200) {
-                    // console.log('loadimg success');
+                    loadObj.length = response.headers['content-length'];
+                    console.log('loadimg success, ', response.headers['content-length']);
                     loadObj.loaded = true;
+                    // console.log(response);
                 } else {
                     console.log('loadailure:', response.statusCode, encodeURI(url));
                     setTimeout(function () {
@@ -54,7 +55,7 @@ function loadAndSave(loadObj) {
                 }
             })
             .on('error', function (err) {
-                console.log('loadimgerr:', err, encodeURI(url));
+                console.warning('loaderr:', err, encodeURI(url));
                 loadObj.failure = true;
                 reject(loadObj);
             })
@@ -62,6 +63,34 @@ function loadAndSave(loadObj) {
                 // console.log('loadimg end');
                 setTimeout(function () {
                     resolve(loadObj);
+                }, 20);
+            })
+            .pipe(fs.createWriteStream(loadObj.saveTo))
+    });
+}
+
+
+function loadAndSave2(url, saveTo) {
+    return new Promise(function (resolve, reject) {
+        try {
+            mkdir(saveTo.substr(0, saveTo.lastIndexOf('/')));
+        } catch (e) {
+            console.warning(e);
+        }
+        request.get({url: encodeURI(url), gzip: false, headers: headers, encoding: null})
+            .on('response', function (response) {
+                if (response.statusCode == 200) {
+                    resolve(response);
+                } else {
+                    reject(response);
+                }
+            })
+            .on('error', function (err) {
+                reject(err);
+            })
+            .on('end', function () {
+                setTimeout(function () {
+                    resolve(-1);
                 }, 20);
             })
             .pipe(fs.createWriteStream(loadObj.saveTo))

@@ -1,9 +1,28 @@
 {
+  "name": "spider-website",
+  "version": "1.0.0",
+  "description": "spider website",
+  "main": "index.js",
+  "scripts": {
+    "test": "standard && mocha",
+    "push": "nrm use npm && npm version patch && npm publish",
+    "build": "babel src -d  lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/laomu1988/spider-website.git"
+  },
+  "bugs": {
+    "url": "https://github.com/laomu1988/spider-website/issues"
+  },
   "dependencies": {
-    "request": "^2.72.0",
     "cheerio": "^0.20.0",
-    "mk-dir": "^1.0.0",
+    "iconv": "^2.2.1",
     "lodash": "^4.13.1",
-    "iconv": "^2.2.1"
-  }
+    "lowdb": "^0.14.0",
+    "mk-dir": "^1.0.1",
+    "request": "^2.72.0"
+  },
+  "author": "laomu1988@qq.com",
+  "license": "MIT"
 }

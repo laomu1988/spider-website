@@ -1,0 +1,38 @@
+{
+  "config": {
+    "url": "http://laomu1988.github.io/index.html",
+    "temp": "spider.json",
+    "autoName": "index.html",
+    "saveTo": "./spider/",
+    "saveReplace": "",
+    "deep": 10,
+    "speed": 10,
+    "reTryTime": 10,
+    "isGBK": false,
+    "beforePush": false,
+    "beforeLoad": false,
+    "onLoad": false,
+    "onFail": false
+  },
+  "list": [
+    {
+      "protocol": "http:",
+      "slashes": true,
+      "auth": null,
+      "host": "laomu1988.github.io",
+      "port": null,
+      "hostname": "laomu1988.github.io",
+      "hash": null,
+      "search": null,
+      "query": null,
+      "pathname": "/index.html",
+      "path": "/index.html",
+      "href": "http://laomu1988.github.io/index.html",
+      "ext": ".html",
+      "saveTo": "./spider/index.html",
+      "deep": 1,
+      "state": 2,
+      "length": "41529"
+    }
+  ]
+}
