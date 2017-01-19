@@ -46,7 +46,8 @@ class Spider extends Event {
         if (!_config.host) {
             _config.host = Url.parse(startUrl).host;
         }
-        var db = low(_config.temp);
+        mkdir(config.saveTo + '/');
+        var db = low(Path.resolve(config.saveTo + '/', _config.temp));
         db.defaults({config: {}, list: []});
         this.db = db;
         this.config = _config;
@@ -54,8 +55,7 @@ class Spider extends Event {
 
         // 判断config是否更改, 假如更改则清空历史记录
         var old_config = db.get('config');
-        if (JSON.stringify(old_config) != JSON.stringify(_config)) {
-            // 配置更新后,清空下载列表
+        if (JSON.stringify(old_config) !== JSON.stringify(_config)) {
             db.set('config', config).value();
             db.set('list', []).value();
             db.write();
@@ -65,9 +65,14 @@ class Spider extends Event {
         if (this.config.url) {
             this.pushLink(this.config.url);
         }
-        this.db.get('list').find({href: this.config.url}).assign({state: 0}).value();
+        this.updateFileInfo({state: 0}, {href: this.config.url});
+        this.index = this.db.get('list').find({href: this.config.url}).value()[0];
     }
 
+    getIndex() {
+        this._index = this._index || this.db.get('list').find({href: this.config.url}).value()[0];
+        return this._index;
+    }
 
     /**
      * 根据文件内容,判断其引入的其他文件
@@ -121,30 +126,40 @@ class Spider extends Event {
                 console.log('重新写入：', file.saveTo);
             }
         } catch (e) {
-            console.log('getLinksError:', e);
+            console.trace('getLinksError:', e);
         }
     }
 
+    /**
+     * 添加新连接
+     * */
     pushLink(link, old) {
-        console.log('pushLink:', link, old ? old.href : '');
-        if (!link || link.indexOf('javascript:') === 0 || link.indexOf('void') === 0 || link[0] === '#' || link === '/') return;
+        // console.log('pushLink:', link, old ? old.href : '');
+        if (link === '/') {
+            var index = this.getIndex();
+            var relative = (old && Path.relative(Path.dirname(old.saveTo), this.config.saveTo + '/')) || './';
+            console.log('relativeIndex:', relative, old.saveTo, this.config.saveTo);
+            return relative;
+        }
+        if (!link || link.indexOf('javascript:') === 0 || link.indexOf('void') === 0 || link.indexOf('data:image') === 0 || link[0] === '#' || link === '/') return;
         var from = old ? old.href : '';
-        console.log('before call');
         if (link.indexOf('http') != 0 && from)link = Url.resolve(from, link);
         if (link.indexOf('?') > 0) link = link.substr(0, link.indexOf('?'));
         if (link.indexOf('#') > 0) link = link.substr(0, link.indexOf('#'));
-        console.log('after cal', link);
         // 计算保存文件位置
         var ext = Path.extname(link);
         if (!ext && config.autoName) {
-            link = Url.resolve(link + '/', config.autoName);
+            link = Url.resolve(link[link.length - 1] === '/' ? link : link + '/', config.autoName);
             ext = Path.extname(config.autoName);
         }
         var obj = Url.parse(link);
         if (obj.host !== this.config.host || (_.isArray(this.config.host) && this.config.host.indexOf(obj.host) < 0)) return;
 
         console.log('添加链接：', link, '         ');
-        var found = this.db.get('list').find({href: link}).value();
+        if (link.indexOf('//index.html') > 0) {
+            process.exit();
+        }
+        var found = this.find({href: link});
         if (found && found.length > 0) return; // 已经添加,无需再次添加
 
         obj.ext = ext;
@@ -171,56 +186,56 @@ class Spider extends Event {
         // 加入下载列表
         this.db.get('list').push(obj).value();
         this.loadNext();
-        // console.log('origin:', obj);
-        return old ? Path.relative(old.saveTo, obj.saveTo) : obj.pathname;
+        return old ? Path.relative(Path.dirname(old.saveTo), obj.saveTo) : obj.pathname;
     }
 
-    /**
-     * 更新文件信息
-     * */
-    updateFileInfo(file) {
-        if (!file || !file.href) return;
-        this.db.get('list').find({href: file.href}).assign(file).value();
+    relative(newPath, oldPath) {
+        if (newPath === '/') {
+
+        }
+    }
+
+    getNeedLoad() {
+        if (!this._needLoaded || this._needLoaded.length === 0) {
+            this._needLoaded = this.db.get('list').filter({state: 0}).sortBy('reTryTime').value();
+        }
+        if (this._needLoaded && this._needLoaded.length > 0) {
+            return this._needLoaded.pop();
+        }
+        return false;
     }
 
     load() {
         if (this.loadingNum > this.config.speed) return;
+        var file = this.getNeedLoad();
         this.state = 'load';
-        var list = this.db.get('list').filter({state: 0}).sortBy('reTryTime').value();
-        var db = this.db;
+        if (!file) return;
         var that = this;
-
-        if (list.length > 0) {
-            var file = list[0];
-            db.find({href: file.href}).assign({state: 1}).value();
-            that.loadingNum += 1;
-            console.log('开始下载:', file.href);
-            this.loadAndSave(file.href, file.saveTo).then(function (response) {
-                console.log('下载成功:', file.href);
-                that.loadingNum -= 1;
-                file.state = 2;
-                file.length = parseInt(response.headers['content-length']) || 0;
-                that.updateFileInfo(file);
-                setTimeout(function () {
-                    // 避免文件还未存储下来
-                    that.resolve(file);
-                    that.loadNext();
-                }, 1000);
-            }, function (err) {
-                console.log('下载失败:', file.href, err);
-                that.loadingNum -= 1;
-                if (file.reTryTime > that.config.reTryTime) {
-                    file.state = 3;
-                } else {
-                    file.state = 0;
-                    file.reTryTime = (file.reTryTime + 1) || 1;
-                }
-                that.updateFileInfo(file);
+        this.updateFileInfo({state: 1}, {href: file.href});
+        that.loadingNum += 1;
+        console.log('开始下载:', file.href);
+        this.loadAndSave(file.href, file.saveTo).then(function (response) {
+            console.log('下载成功:', file.href);
+            that.loadingNum -= 1;
+            file.state = 2;
+            that.updateFileInfo(file);
+            setTimeout(function () {
+                // 避免文件还未存储下来
+                that.resolve(file);
                 that.loadNext();
-            });
-        } else {
-            console.log("下载完毕.");
-        }
+            }, 1000);
+        }, function (err) {
+            console.log('下载失败:', file.href, err);
+            that.loadingNum -= 1;
+            if (file.reTryTime > that.config.reTryTime) {
+                file.state = 3;
+            } else {
+                file.state = 0;
+                file.reTryTime = (file.reTryTime + 1) || 1;
+            }
+            that.updateFileInfo(file);
+            that.loadNext();
+        });
     }
 
     loadNext() {
@@ -262,16 +277,32 @@ class Spider extends Event {
         });
     }
 
+    /**
+     * 配置为未下载
+     * */
     update(link) {
         if (!link) link = this.config.url;
         if (!link) return this;
-        var file = this.db.get('list').find({href: link}).value();
+        var file = this.find({href: link});
         if (file && file.length > 0) {
-            this.db.get('list').find({href: link}).assign({state: 0}).value();
+            this.updateFileInfo({state: 0}, {href: link});
             this.loadNext();
         } else {
             this.pushLink(link);
         }
+    }
+
+    find(condition) {
+        return this.db.get('list').find(condition).value();
+    }
+
+    /**
+     * 更新文件信息
+     * */
+    updateFileInfo(file, condition) {
+        if (!file || !file.href) return;
+        if (!condition) condition = {href: file.href};
+        this.db.get('list').find(condition).assign(file).value();
     }
 
     // 清空下载记录
