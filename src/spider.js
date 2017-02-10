@@ -9,6 +9,7 @@ const temp = require('temp-data');
 const request = require('request');
 const mkdir = require('mk-dir');
 const debug = require('debug')('spider');
+const isDir = require('is-dir');
 
 /**
  * 文件state: 等待下载0, 下载中1,下载成功2,下载失败3, 无需下载-1
@@ -28,6 +29,8 @@ const config = {
     isGBK: false, // 是否是gbk编码
     timeout: 100000 // 下载超时时间
 };
+
+
 class Spider extends Event {
     constructor(_config) {
         super();
@@ -60,6 +63,8 @@ class Spider extends Event {
         if (this.config.url) {
             this.pushLink(this.config.url);
         }
+        debug('start spider..');
+        this.save();
     }
     save() {
         this.db.$save();
@@ -69,10 +74,8 @@ class Spider extends Event {
      * 下载完毕后，根据文件内容,判断其引入的其他文件
      * */
     getLinks(file) {
-        debug('resolve:', file.href);
-        var filename = file.saveTo,
-            href = file.href,
-            deep = file.deep || 1;
+        debug('getLinks:', file.link);
+        var filename = config.saveTo + '/' + file.saveTo;
         if (file.deep > config.deep || (file.ext !== '.html' && file.ext !== '.htm')) return;
         try {
             if (config.isGBK) {
@@ -116,8 +119,8 @@ class Spider extends Event {
                 if (config.isGBK) {
                     html = html.replace(/charset=\w+/, 'charset=utf-8')
                 }
-                fs.writeFileSync(file.saveTo, $.html(), 'utf8');
-                debug('重新写入：', file.saveTo);
+                fs.writeFileSync(filename, $.html(), 'utf8');
+                debug('重新写入：', filename);
             }
         } catch (e) {
             console.trace('getLinksError:', e);
@@ -135,37 +138,28 @@ class Spider extends Event {
         //     debug('relativeIndex:', relative, old.saveTo, this.config.saveTo);
         //     return relative;
         // }
-        link = this.relative(link, old && old.href);
-        if (!link) return;
+        var file = this.absolute(link, old && old.link);
+        if (!file) return;
         // 判断是否已经加入列表中
+        var link = file.link;
+        debug('pushLink:', file.link);
         if (this.db.links[link]) {
+            debug('link has been added ..');
             return;
         }
-
-        var file = Url.parse(link);
-
         // 根据host判断是否在可下载列表中
-        if (file.host !== this.config.host || (_.isArray(this.config.host) && this.config.host.indexOf(file.host) < 0)) return;
+        if (file.host !== this.config.host || (_.isArray(this.config.host) && this.config.host.indexOf(file.host) < 0)) {
+            debug('link host is NOT in config.host ..');
+            return;
+        }
+        file.saveTo = this.getSavePath(file);
+        file.deep = old && old.deep ? file.deep + 1 || 1 : 0;
+        if (file.deep > config.deep && file.ext == '.html') {
+            debug('link is deep');
+            return;
+        }
 
         console.log('添加链接：', link, '         ');
-        file.ext = Path.extname(link);
-        if (!config.saveReplace) {
-            file.saveTo = (config.saveTo + file.pathname).replace('//', '/');
-        } else {
-            debug('pathname:', file.pathname, config.saveReplace);
-            var index = file.pathname.indexOf(config.saveReplace);
-            if (index == 0) {
-                file.pathname = file.pathname.substr(config.saveReplace.length - 1);
-                file.saveTo = (config.saveTo + file.pathname).replace('//', '/');
-            } else {
-                return;
-            }
-        }
-        file.deep = old && typeof old.deep == 'undefined' ? 0 : file.deep + 1 || 1;
-
-        if (file.deep > config.deep && file.ext == '.html') {
-            return;
-        }
         file.state = 0;
         // 加入下载列表
         this.db.links[link] = file;
@@ -176,8 +170,17 @@ class Spider extends Event {
         return old ? Path.relative(Path.dirname(old.saveTo), file.saveTo) : file.pathname;
     }
 
-    relative(link, from) {
-        debug('relative:', link, from);
+    getSavePath(file) {
+        var index = config.saveReplace && file.pathname.indexOf(config.saveReplace);
+        if (index === 0) {
+            return file.pathname.substr(config.saveReplace.length - 1);
+        } else {
+            return file.pathname;
+        }
+    }
+
+    absolute(link, from) {
+        debug('absolute:', link, from);
         // if (link === '/') {
         //     var relative = (old && Path.relative(Path.dirname(old.saveTo), this.config.saveTo + '/')) || './';
         //     debug('relativeIndex:', relative, old.saveTo, this.config.saveTo);
@@ -189,15 +192,20 @@ class Spider extends Event {
         if (link.indexOf('#') > 0) link = link.substr(0, link.indexOf('#'));
 
         // 计算保存文件位置,加入是文件夹则自动增加文件路径
-        var ext = Path.extname(link);
+        var file = Url.parse(link);
+        var ext = Path.extname(file.pathname);
         if (!ext && config.autoName) {
-            link = Url.resolve(link[link.length - 1] === '/' ? link : link + '/', config.autoName);
+            file.pathname = (file.pathname + '/' + config.autoName).replace(/\/\//g, '/');
             ext = Path.extname(config.autoName);
         }
-        debug('relative:', link);
-        return link;
+        return {
+            host: file.host,
+            link: file.protocol + '//' + file.host + file.pathname,
+            pathname: file.pathname,
+            query: file.query,
+            ext: ext
+        };
     }
-
     getNeedLoad() {
         if (!this._needLoaded || this._needLoaded.length === 0) {
             var links = this.db.links;
@@ -225,9 +233,9 @@ class Spider extends Event {
         this.state = 'load';
         file.state = 1;
         that.loadingNum += 1;
-        debug('开始下载:', file.href);
-        loadAndSave(file.href, file.saveTo, this.config.tiemout).then(function(response) {
-            debug('下载成功:', file.href);
+        console.log('开始下载:', file.link, file.saveTo);
+        loadAndSave(file.link, this.config.saveTo + '/' + file.saveTo, this.config.tiemout).then(function(response) {
+            console.log('下载成功:', file.link);
             that.loadingNum -= 1;
             file.state = 2;
             setTimeout(function() {
@@ -237,7 +245,7 @@ class Spider extends Event {
                 that.save();
             }, 1000);
         }, function(err) {
-            debug('下载失败:', file.href, err);
+            console.warning('下载失败:', file.link, err);
             that.loadingNum -= 1;
             if (file.reTryTime > that.config.reTryTime) {
                 file.state = 3;
@@ -275,9 +283,9 @@ class Spider extends Event {
     update(link) {
         if (!link) link = this.config.url;
         if (!link) return this;
-        link = this.relative(link);
-        if (!link) return this;
-        var file = this.db.links[link];
+        var file = this.absolute(link);
+        if (!file) return this;
+        file = this.db.links[file.link];
         if (file) {
             file.state = 0;
             file.loadTimes = 0;
@@ -309,8 +317,10 @@ const headers = {
 };
 
 function loadAndSave(href, saveTo, timeout) {
+    // debug('loadAndSave:', href, saveTo);
     return new Promise(function(resolve, reject) {
         if (saveTo.indexOf('?') >= 0) saveTo = saveTo.substr(0, saveTo.indexOf('?'));
+        if (isDir(saveTo)) return reject(new Error('saveTo path is directory...'));
         try {
             mkdir(saveTo.substr(0, saveTo.lastIndexOf('/')));
         } catch (e) {

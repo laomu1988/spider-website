@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * node命令行参考: http://www.ruanyifeng.com/blog/2015/05/command-line-with-node.html
  * 规则：
@@ -8,9 +9,14 @@
 var package = require('../package.json');
 var fs = require('fs');
 var argv = require('yargs')
-    .option('s', {alias: 'save', demand: false, type: 'string', describe: '存放目录'})
+    .option('s', {
+        alias: 'save',
+        demand: false,
+        type: 'string',
+        describe: '存放目录'
+    })
     .usage('Usage: spider website [--save folder]')
-    .example('spider http://laomu1988.github.io/index.html --save laomu')
+    .example('spider http://laomu1988.github.io/index.html --save spider')
     .help('h')
     .alias('h', 'help')
     .epilog('View Details: \n')
