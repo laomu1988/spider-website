@@ -7,7 +7,7 @@
     "spider": "./bin/spider.js"
   },
   "scripts": {
-    "test": "standard && mocha",
+    "test": "DEBUG=* node test/spider.test.js",
     "push": "nrm use npm && npm version patch && npm publish",
     "build": "babel src -d  lib"
   },
@@ -20,11 +20,12 @@
   },
   "dependencies": {
     "cheerio": "^0.20.0",
+    "debug": "^2.6.0",
     "iconv": "^2.2.1",
     "lodash": "^4.13.1",
-    "lowdb": "^0.14.0",
     "mk-dir": "^1.0.1",
     "request": "^2.72.0",
+    "temp-data": "^1.0.0",
     "yargs": "^6.6.0"
   },
   "author": "laomu1988@qq.com",
