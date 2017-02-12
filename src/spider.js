@@ -89,11 +89,11 @@ class Spider extends Event {
             var $ = cheerio.load(body);
             var hrefs = $('[href]');
             var changed = 0,
-                pathname;
+                temp_file;
             for (var i = 0; i < hrefs.length; i++) {
-                var pathname = this.pushLink(hrefs[i].attribs.href, file);
-                if (pathname) {
-                    hrefs[i].attribs.href = pathname;
+                var temp_file = this.pushLink(hrefs[i].attribs.href, file);
+                if (temp_file) {
+                    hrefs[i].attribs.href = Path.relative(file.saveTo, temp_file.saveTo);
                     changed += 1;
                 }
             }
@@ -101,15 +101,15 @@ class Spider extends Event {
             var imgs = $('[src]');
             for (var i = 0; i < imgs.length; i++) {
                 if (imgs[i].attribs['data-original']) {
-                    pathname = this.pushLink(imgs[i].attribs['data-original'], file);
-                    if (pathname) {
-                        imgs[i].attribs['data-original'] = pathname;
+                    temp_file = this.pushLink(imgs[i].attribs['data-original'], file);
+                    if (temp_file) {
+                        imgs[i].attribs['data-original'] = Path.relative(file.saveTo, temp_file.saveTo);
                         changed += 1;
                     }
                 } else if (imgs[i].attribs['src']) {
-                    pathname = this.pushLink(imgs[i].attribs['src'], file);
-                    if (pathname) {
-                        imgs[i].attribs['src'] = pathname;
+                    temp_file = this.pushLink(imgs[i].attribs['src'], file);
+                    if (temp_file) {
+                        imgs[i].attribs['src'] = Path.relative(file.saveTo, temp_file.saveTo);
                         changed += 1;
                     }
                 }
@@ -145,7 +145,7 @@ class Spider extends Event {
         debug('pushLink:', file.link);
         if (this.db.links[link]) {
             debug('link has been added ..');
-            return;
+            return this.db.links[link];
         }
         // 根据host判断是否在可下载列表中
         if (file.host !== this.config.host || (_.isArray(this.config.host) && this.config.host.indexOf(file.host) < 0)) {
@@ -167,7 +167,7 @@ class Spider extends Event {
         this.save();
         this.emit('push', file);
         this.loadNext();
-        return old ? Path.relative(Path.dirname(old.saveTo), file.saveTo) : file.pathname;
+        return file;
     }
 
     getSavePath(file) {
@@ -293,6 +293,15 @@ class Spider extends Event {
         } else {
             this.pushLink(link);
         }
+        // 清空未下载文件的下载次数
+        var links = this.db.links;
+        for (var link in links) {
+            file = links[link];
+            if (file.state !== 2) {
+                file.state = 0;
+                file.reTryTime = 0;
+            }
+        }
         this.load();
     }
 
@@ -315,6 +324,7 @@ const headers = {
     "Upgrade-Insecure-Requests": "1",
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36"
 };
+
 
 function loadAndSave(href, saveTo, timeout) {
     // debug('loadAndSave:', href, saveTo);
