@@ -85,35 +85,29 @@ class Spider extends Event {
             } else {
                 var body = fs.readFileSync(filename, 'utf8');
             }
+            var me = this;
             // debug(body);
             var $ = cheerio.load(body);
-            var hrefs = $('[href]');
-            var changed = 0,
-                temp_file;
-            for (var i = 0; i < hrefs.length; i++) {
-                var temp_file = this.pushLink(hrefs[i].attribs.href, file);
-                if (temp_file) {
-                    hrefs[i].attribs.href = relative(file.saveTo, temp_file.saveTo);
+            var attrs = ['href', 'src', 'data-original'];
+            var list = Array.prototype.slice.call($('[href],[src]'));
+            // debug('list', list);
+            var changed = 0;
+            list.forEach(function(dom) {
+                var attr = '',
+                    domAttrs = dom.attribs;
+                for (var i = 0; i < attrs.length; i++) {
+                    if (domAttrs[attrs[i]]) {
+                        attr = attrs[i];
+                        break;
+                    }
+                }
+                if (!attr) return debug('no attr');
+                var link = me.relative(domAttrs[attr], file);
+                if (dom.attribs[attr] !== link) {
+                    dom.attribs[attr] = link;
                     changed += 1;
                 }
-            }
-
-            var imgs = $('[src]');
-            for (var i = 0; i < imgs.length; i++) {
-                if (imgs[i].attribs['data-original']) {
-                    temp_file = this.pushLink(imgs[i].attribs['data-original'], file);
-                    if (temp_file) {
-                        imgs[i].attribs['data-original'] = relative(file.saveTo, temp_file.saveTo);
-                        changed += 1;
-                    }
-                } else if (imgs[i].attribs['src']) {
-                    temp_file = this.pushLink(imgs[i].attribs['src'], file);
-                    if (temp_file) {
-                        imgs[i].attribs['src'] = relative(file.saveTo, temp_file.saveTo);
-                        changed += 1;
-                    }
-                }
-            }
+            });
             if (changed > 0) {
                 var html = $.html();
                 if (config.isGBK) {
@@ -124,6 +118,20 @@ class Spider extends Event {
             }
         } catch (e) {
             console.trace('getLinksError:', e);
+        }
+    }
+
+    /**
+     * 计算相对路径地址
+     */
+    relative(link, old) {
+        var file = this.pushLink(link, old);
+        if (file) {
+            return relative(old.saveTo, file.saveTo);
+        } else if (link.indexOf('//') === 0) {
+            return (old && old.protocol || 'http:') + link;
+        } else {
+            return link;
         }
     }
 
@@ -200,6 +208,7 @@ class Spider extends Event {
         }
         return {
             host: file.host,
+            protocol: file.protocol,
             link: file.protocol + '//' + file.host + file.pathname,
             pathname: file.pathname,
             query: file.query,
