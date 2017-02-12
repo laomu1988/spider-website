@@ -93,7 +93,7 @@ class Spider extends Event {
             for (var i = 0; i < hrefs.length; i++) {
                 var temp_file = this.pushLink(hrefs[i].attribs.href, file);
                 if (temp_file) {
-                    hrefs[i].attribs.href = Path.relative(file.saveTo, temp_file.saveTo);
+                    hrefs[i].attribs.href = relative(file.saveTo, temp_file.saveTo);
                     changed += 1;
                 }
             }
@@ -103,13 +103,13 @@ class Spider extends Event {
                 if (imgs[i].attribs['data-original']) {
                     temp_file = this.pushLink(imgs[i].attribs['data-original'], file);
                     if (temp_file) {
-                        imgs[i].attribs['data-original'] = Path.relative(file.saveTo, temp_file.saveTo);
+                        imgs[i].attribs['data-original'] = relative(file.saveTo, temp_file.saveTo);
                         changed += 1;
                     }
                 } else if (imgs[i].attribs['src']) {
                     temp_file = this.pushLink(imgs[i].attribs['src'], file);
                     if (temp_file) {
-                        imgs[i].attribs['src'] = Path.relative(file.saveTo, temp_file.saveTo);
+                        imgs[i].attribs['src'] = relative(file.saveTo, temp_file.saveTo);
                         changed += 1;
                     }
                 }
@@ -325,6 +325,9 @@ const headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36"
 };
 
+function relative(path, dest) {
+    return Path.relative(path, dest).substr(1);
+}
 
 function loadAndSave(href, saveTo, timeout) {
     // debug('loadAndSave:', href, saveTo);
