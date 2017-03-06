@@ -11,6 +11,7 @@ const mkdir = require('mk-dir');
 const debug = require('debug')('spider');
 const isDir = require('is-dir');
 const death = require('death');
+const hash = require('object-hash');
 
 /**
  * 文件state: 等待下载0, 下载中1,下载成功2,下载失败3, 无需下载-1
@@ -18,17 +19,18 @@ const death = require('death');
  * */
 
 const config = {
-    url: '', // 启动地址
-    host: '', // 仅下载该域名下内容
-    temp: 'spider.json', // 缓存文件
+    url: '',                // 启动地址
+    host: '',               // 仅下载该域名下内容,默认和url中host一致
+    temp: 'spider.json',    // 缓存文件,存放下载列表
     autoName: 'index.html', // 自动增加扩展名
-    saveTo: './spider/', // 下载文件保存路径
-    saveReplace: '', // 保存时仅保存该路径下内容
-    deep: 10, // 最多加载深度
-    speed: 10, // 同时下载多少个文件
-    reTryTime: 10, // 最多重试次数
-    isGBK: false, // 是否是gbk编码
-    timeout: 100000 // 下载超时时间
+    saveTo: './spider/',    // 下载文件保存路径
+    saveReplace: '',        // 保存时仅保存该路径下内容
+    // autoResolve: true,      // 是否自动根据html引入文件
+    deep: 10,               // 最多加载深度
+    speed: 10,              // 同时下载多少个文件
+    reTryTime: 10,          // 最多重试次数
+    isGBK: false,           // 是否是gbk编码
+    timeout: 100000         // 下载超时时间
 };
 
 
@@ -40,9 +42,11 @@ class Spider extends Event {
         };
         _config = _.extend(config, _config);
         var startUrl = _config.url;
+
         if (!_config.host) {
             _config.host = Url.parse(startUrl).host;
         }
+
         mkdir(config.saveTo + '/');
         var db = temp(Path.resolve(config.saveTo + '/', _config.temp), {
             config: {},
@@ -51,8 +55,8 @@ class Spider extends Event {
         });
         this.db = db;
         this.config = _config;
-        this.loadingNum = 0; // 正在下载的文件数
         this.loadState = ''; // 文件下载状态： 默认空， load： 下载中，stop： 停止下载
+        this.loadList = [];  // 正在下载的文件列表
 
         // 判断config是否更改, 假如更改则清空历史记录
         var old_config = db.config;
@@ -77,27 +81,31 @@ class Spider extends Event {
         });
     }
 
-    save() {
-        this.db.$save();
+    /**
+     * 保存下载记录
+     * */
+    save(isRightNow) {
+        this.db.$save(isRightNow);
     }
 
     /**
      * 下载完毕后，根据文件内容,判断其引入的其他文件
      * */
-    getLinks(file) {
-        debug('getLinks:', file.link);
+    getLinks(file, body) {
+        debug('getLinks:', file.link, body);
         var filename = config.saveTo + '/' + file.saveTo;
         if (file.deep > config.deep || (file.ext !== '.html' && file.ext !== '.htm')) return;
         try {
+
             if (config.isGBK) {
                 var gbk_to_utf8 = new Iconv('GBK', 'UTF8');
-                var buffer = gbk_to_utf8.convert(fs.readFileSync(filename));
-                var body = buffer.toString();
+                var buffer = gbk_to_utf8.convert(body);
+                body = buffer.toString();
             } else {
-                var body = fs.readFileSync(filename, 'utf8');
+                body = body + '';
             }
+
             var me = this;
-            // debug(body);
             var $ = cheerio.load(body);
             var attrs = ['href', 'src', 'data-original'];
             var list = Array.prototype.slice.call($('[href],[src]'));
@@ -177,8 +185,7 @@ class Spider extends Event {
             debug('link is deep');
             return;
         }
-
-        console.log('添加链接：', link, '         ');
+        debug('添加链接:', link);
         file.state = 0;
         // 加入下载列表
         this.db.links[link] = file;
@@ -247,34 +254,43 @@ class Spider extends Event {
     }
 
     load() {
-        if (this.loadingNum > this.config.speed) return;
+        if (this.loadList.length >= this.config.speed) return;
         var file = this.getNeedLoad();
         if (!file) return;
         var that = this;
         this.state = 'load';
         file.state = 1;
-        that.loadingNum += 1;
-        console.log('开始下载:(' + that.loadingNum + ')', file.link, file.saveTo);
-        loadAndSave(file.link, this.config.saveTo + '/' + file.saveTo, this.config.tiemout).then(function (body, response) {
-            console.log('下载成功:', file.link);
-            that.loadingNum -= 1;
+        that.loadList.push(file);
+        this.emit('load_before', file);
+        loadAndSave(file.link, this.config.saveTo + '/' + file.saveTo, this.config.tiemout).then(function (response, body) {
+            debug('下载成功:', file.link);
             file.state = 2;
+            var index = that.loadList.indexOf(file);
+            index >= 0 && that.loadList.splice(index, 1);
             setTimeout(function () {
-                that.emit('loaded', file, body, response);
-                // 避免文件还未存储下来
-                that.getLinks(file);
-                that.loadNext();
-                that.save();
-            }, 1000);
+                try {
+                    file.hash = hash(response.body + '');
+                    that.emit('loaded', file, response);
+                    // 避免文件还未存储下来
+                    that.getLinks(file, response.body);
+                    that.loadNext();
+                    that.save();
+                } catch (e) {
+                    console.log(e);
+                    that.emit('error', e);
+                }
+            }, 10);
         }, function (err) {
-            that.loadingNum -= 1;
-            console.warn('下载失败:', file.link);
+            var index = that.indexOf(file);
+            index >= 0 && that.loadList.splice(index, 1);
+
+            file.reTryTime = (file.reTryTime + 1) || 1;
+            debug('下载失败:', file.link);
             that.emit('load_fail', file, err);
             if (file.reTryTime > that.config.reTryTime) {
                 file.state = 3;
             } else {
                 file.state = 0;
-                file.reTryTime = (file.reTryTime + 1) || 1;
             }
             that.loadNext();
             that.save();
@@ -328,9 +344,22 @@ class Spider extends Event {
         this.load();
     }
 
+    has(link) {
+        return this.links[link];
+    }
+
+    remove(link) {
+        var file = this.links[link];
+        if (file) {
+            delete this.links[link];
+            var index = this.list.indexOf(file);
+            index >= 0 && this.list.splice(index, 1);
+        }
+        return this;
+    }
+
     // 清空下载记录
     clean() {
-        var db = this.db;
         this.db.list = [];
         this.db.links = {};
         this.save();
@@ -366,7 +395,6 @@ function loadAndSave(href, saveTo, timeout) {
         request({
             url: encodeURI(href),
             method: 'get',
-            encoding: null,
             gzip: false,
             headers: headers,
             encoding: null
@@ -375,7 +403,7 @@ function loadAndSave(href, saveTo, timeout) {
                 reject(err || response);
             } else {
                 fs.writeFileSync(saveTo, body);
-                resolve(response, body, response);
+                resolve(response);
             }
         });
     });

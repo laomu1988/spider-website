@@ -21,9 +21,11 @@ var Spider = require('spider-website');
 var index = 'http://laomu1988.github.io/index.html';
 
 var spider = new Spider({url: index, saveTo: __dirname + '/save/'});
-spider.clean();
-spider.update(index); // 重新下载某个链接
 spider.load();
+
+spider.on('loaded', function(file) {
+    console.log('下载文件:',file.link);
+});
 ```
 
 ## config
@@ -31,12 +33,17 @@ spider.load();
 * saveTo: 保存文件目录
 
 ## api
-* clean:  清空下载历史数据
-* update: 更新数据
-* load:   开始下载
+* load()      : 开始下载
+* stop()      : 停止下载
+* clean()     : 清空下载历史数据
+* update(link): 更新数据
+* remove(link): 移除下载链接
+* has(link)   : 下载链接是否加入列表
 
 ## event
-* loaded  下载成功触发, 参数(file,body,response)
+* push      文件加入下载列表时触发,参数(file) 
+* load_before 下载文件前触发
+* loaded    下载成功触发, 参数(file,body,response)
 * load_fail 下载失败触发, 参数(file, response || err)
 
 ## data
@@ -52,6 +59,8 @@ spider.load();
     - saveTo: 文件保存地址，不包括config.saveTo的部分
     - state：  文件下载状态，0：未下载，1：下载中，2：下载成功， 3：下载失败
     - reTryTime: 重试了多少次
+    - hash:      文件内容的hash值,可用来判断文件是否改变
+
 
 ## spider处理流程
 1. 计算页面保存位置等属性
@@ -72,6 +81,8 @@ spider.load();
     - [x] 要下载的文件列表
     - [x] 文件状态更新
     - [ ] 是否存在未下载的文件
+* [x] has 是否存在某个链接
+* [x] remove 移除某个链接
 * [ ] 取消配置文件编码,当时gbk时下载文件完毕后自动转换为utf8格式
 * 文件链接解析
     - [x] html文件引入其他: html,js,css,img
