@@ -68,8 +68,12 @@ class Spider extends Event {
         this.save();
 
         death(()=> {
-            console.log('death');
-            this.save();
+            debug('death');
+            this.save(true);
+            // process.exit();
+            process.nextTick(function () {
+                process.exit();
+            });
         });
     }
 
