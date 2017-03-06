@@ -10,6 +10,7 @@ const request = require('request');
 const mkdir = require('mk-dir');
 const debug = require('debug')('spider');
 const isDir = require('is-dir');
+const death = require('death');
 
 /**
  * 文件state: 等待下载0, 下载中1,下载成功2,下载失败3, 无需下载-1
@@ -65,7 +66,13 @@ class Spider extends Event {
         }
         debug('start spider..');
         this.save();
+
+        death(()=> {
+            console.log('death');
+            this.save();
+        });
     }
+
     save() {
         this.db.$save();
     }
@@ -92,7 +99,7 @@ class Spider extends Event {
             var list = Array.prototype.slice.call($('[href],[src]'));
             // debug('list', list);
             var changed = 0;
-            list.forEach(function(dom) {
+            list.forEach(function (dom) {
                 var attr = '',
                     domAttrs = dom.attribs;
                 for (var i = 0; i < attrs.length; i++) {
@@ -215,16 +222,17 @@ class Spider extends Event {
             ext: ext
         };
     }
+
     getNeedLoad() {
         if (!this._needLoaded || this._needLoaded.length === 0) {
             var links = this.db.links;
-            var list = this.db.list.map(function(link) {
+            var list = this.db.list.map(function (link) {
                 return links[link];
             });
             // debug(list, list.filter);
-            this._needLoaded = this.db.list.map(function(link) {
+            this._needLoaded = this.db.list.map(function (link) {
                 return links[link];
-            }).filter(function(a) {
+            }).filter(function (a) {
                 return a.state == 0;
             });
         }
@@ -242,20 +250,22 @@ class Spider extends Event {
         this.state = 'load';
         file.state = 1;
         that.loadingNum += 1;
-        console.log('开始下载:', file.link, file.saveTo);
-        loadAndSave(file.link, this.config.saveTo + '/' + file.saveTo, this.config.tiemout).then(function(response) {
+        console.log('开始下载:(' + that.loadingNum + ')', file.link, file.saveTo);
+        loadAndSave(file.link, this.config.saveTo + '/' + file.saveTo, this.config.tiemout).then(function (body, response) {
             console.log('下载成功:', file.link);
             that.loadingNum -= 1;
             file.state = 2;
-            setTimeout(function() {
+            setTimeout(function () {
+                that.emit('loaded', file, body, response);
                 // 避免文件还未存储下来
                 that.getLinks(file);
                 that.loadNext();
                 that.save();
             }, 1000);
-        }, function(err) {
-            console.warning('下载失败:', file.link, err);
+        }, function (err) {
             that.loadingNum -= 1;
+            console.warn('下载失败:', file.link);
+            that.emit('load_fail', file, err);
             if (file.reTryTime > that.config.reTryTime) {
                 file.state = 3;
             } else {
@@ -272,7 +282,7 @@ class Spider extends Event {
      */
     loadNext() {
         var that = this;
-        setTimeout(function() {
+        setTimeout(function () {
             if (that.state === 'load') that.load();
         }, 1000);
     }
@@ -340,7 +350,7 @@ function relative(path, dest) {
 
 function loadAndSave(href, saveTo, timeout) {
     // debug('loadAndSave:', href, saveTo);
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
         if (saveTo.indexOf('?') >= 0) saveTo = saveTo.substr(0, saveTo.indexOf('?'));
         if (isDir(saveTo)) return reject(new Error('saveTo path is directory...'));
         try {
@@ -349,16 +359,21 @@ function loadAndSave(href, saveTo, timeout) {
             console.warning(e);
         }
         setTimeout(reject, timeout || 100000)
-
-        request.get({
-                url: encodeURI(href),
-                gzip: false,
-                headers: headers,
-                encoding: null
-            })
-            .on('response', resolve)
-            .on('error', reject)
-            .pipe(fs.createWriteStream(saveTo))
+        request({
+            url: encodeURI(href),
+            method: 'get',
+            encoding: null,
+            gzip: false,
+            headers: headers,
+            encoding: null
+        }, function (err, response, body) {
+            if (err || response.statusCode !== 200) {
+                reject(err || response);
+            } else {
+                fs.writeFileSync(saveTo, body);
+                resolve(response, body, response);
+            }
+        });
     });
 }
 

@@ -1,6 +1,5 @@
 # 网站爬虫（自动下载工具）
 
-
 ## 安装
 安装node之后执行
 ```
@@ -35,6 +34,10 @@ spider.load();
 * clean:  清空下载历史数据
 * update: 更新数据
 * load:   开始下载
+
+## event
+* loaded  下载成功触发, 参数(file,body,response)
+* load_fail 下载失败触发, 参数(file, response || err)
 
 ## data
 * spider.config: 配置内容
