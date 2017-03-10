@@ -30,6 +30,7 @@ const config = {
   // saveSpider: true,      // 保存文件下载历史
   // autoEncode: true,     // 自动将文件编码转换为utf8
   // autoConvertRelative: true  // 将文件引用地址转换为相对地址
+  // autoCover: true,       // 已经存在文件则覆盖
   deep: 10,               // 最多加载深度
   speed: 10,              // 同时下载多少个文件
   reTryTime: 10,          // 最多重试次数
@@ -189,7 +190,7 @@ class Spider extends Event {
     file.saveTo = this.getSavePath(file)
     file.deep = old && old.deep ? file.deep + 1 || 1 : 0
     if (file.deep > config.deep && file.ext == '.html') {
-      debug('link is deep')
+      debug('link is too deep')
       return
     }
     debug('添加链接:', link)
@@ -227,7 +228,7 @@ class Spider extends Event {
         // 计算保存文件位置,加入是文件夹则自动增加文件路径
     var file = Url.parse(link)
     var ext = Path.extname(file.pathname)
-    if (!ext && config.autoName) {
+    if ((!ext && config.autoName) || file.pathname[file.pathname.length - 1] === '/') {
       file.pathname = (file.pathname + '/' + config.autoName).replace(/\/\//g, '/')
       ext = Path.extname(config.autoName)
     }
