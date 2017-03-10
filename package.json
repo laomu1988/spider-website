@@ -21,7 +21,7 @@
   "dependencies": {
     "cheerio": "^0.20.0",
     "debug": "^2.6.0",
-    "iconv": "^2.2.1",
+    "iconv-lite": "^0.4.15",
     "is-dir": "^1.0.0",
     "lodash": "^4.13.1",
     "mk-dir": "^1.0.1",

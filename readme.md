@@ -41,7 +41,7 @@ spider.on('loaded', function(file) {
 * has(link)   : 下载链接是否加入列表
 
 ## event
-* push      文件加入下载列表时触发,参数(file) 
+* push      文件加入下载列表时触发,参数(file)
 * load_before 下载文件前触发
 * loaded    下载成功触发, 参数(file,body,response)
 * load_fail 下载失败触发, 参数(file, response || err)
@@ -75,6 +75,7 @@ spider.on('loaded', function(file) {
 * [x] 使用es6 class改写spider
 * [x] 命令行下载数据: spider [website]
 * [x] 文件中绝对路径改为相对路径
+* [ ] 根据服务器返回编码，自动转换为utf8格式
 * [ ] 下载地址为网站的某一个子目录下文件则默认配置为只下载该子目录下的文件，其他文件仍然指向原网址
 * 本地数据库存储
     - [x] 本次配置,配置是否变更

@@ -3,7 +3,7 @@ const cheerio = require('cheerio') // cherrio是用jquery的语法来解析html
 const fs = require('fs')
 const Url = require('url')
 const Path = require('path')
-const Iconv = require('iconv').Iconv
+const Iconv = require('iconv-lite')
 const _ = require('lodash')
 const temp = require('temp-data')
 const request = require('request')
@@ -25,7 +25,11 @@ const config = {
   autoName: 'index.html', // 自动增加扩展名
   saveTo: './spider/',    // 下载文件保存路径
   saveReplace: '',        // 保存时仅保存该路径下内容
-    // autoResolve: true,   // 是否自动根据html引入文件
+  request: undefined,     // request时带有的参数
+  // autoDetective: true,   // 是否自动根据html引入文件
+  // saveSpider: true,      // 保存文件下载历史
+  // autoEncode: true,     // 自动将文件编码转换为utf8
+  // autoConvertRelative: true  // 将文件引用地址转换为相对地址
   deep: 10,               // 最多加载深度
   speed: 10,              // 同时下载多少个文件
   reTryTime: 10,          // 最多重试次数
@@ -101,9 +105,7 @@ class Spider extends Event {
     debug('getLinks:', file.link, body)
     try {
       if (config.isGBK) {
-        var gbk_to_utf8 = new Iconv('GBK', 'UTF8')
-        var buffer = gbk_to_utf8.convert(body)
-        body = buffer.toString()
+        body = iconv.decode(body, 'gbk')
       } else {
         body = body + ''
       }
