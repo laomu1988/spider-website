@@ -39,6 +39,7 @@ spider.on('loaded', function(file) {
 * update(link): 更新数据
 * remove(link): 移除下载链接
 * has(link)   : 下载链接是否加入列表
+* get(link)   : 取得下载对象
 
 ## event
 * push      文件加入下载列表时触发,参数(file)
@@ -46,18 +47,26 @@ spider.on('loaded', function(file) {
 * loaded    下载成功触发, 参数(file,body,response)
 * load_fail 下载失败触发, 参数(file, response || err)
 
-## data
+## spider
 * spider.config: 配置内容
 * spider.links: {link: file} 所有文件及其状态，改对象的key是文件的下载地址
 * spider.list: [link,link],所有下载的或者未下载的文件列表
-* file  spider.links中的文件
-    - link: 下载地址
+
+## File对象
+* construnct(href|data, opts)
+* load() 下载数据
+* isHTML() 是否是html文件
+* isText() 是否是文本文件
+* getLinks() 获取文件中的链接
+* getBody() 获取body主体
+* 属性
+    - link: 下载地址，不包含query和hash部分
+    - href: 全部地址，包含query和hash
+    - protocol: http:或者https:
     - host: 网址host
     - pathname： 网址路径
-    - query: 加载改地址的query，例如`a.js?hash=123`,则query为`hash=123`,link中没有存放该内容
-    - ext:  文件扩展名
     - saveTo: 文件保存地址，不包括config.saveTo的部分
-    - state：  文件下载状态，0：未下载，1：下载中，2：下载成功， 3：下载失败
+    - loadState：  文件下载状态，0：未下载，1：下载中，2：下载成功， 3：下载失败
     - reTryTime: 重试了多少次
     - hash:      文件内容的hash值,可用来判断文件是否改变
 
