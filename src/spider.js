@@ -172,6 +172,11 @@ class Spider extends Event {
       debug('下载失败:', file.href)
       var index = me.loadList.indexOf(file)
       index >= 0 && me.loadList.splice(index, 1)
+      if(file.response && (file.response.statusCode == 301 || file.response.statusCode == 302)) {
+        let location = file.response.headers.location;
+        file.loadState = file.response.statusCode
+        if(location) me.push(location);
+      }
       me.emit('load_fail', file, file.err || file.response)
       me.loadNext()
       me.save()
