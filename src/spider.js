@@ -19,13 +19,14 @@ const config = {
   temp: 'spider.json',    // 缓存文件,存放下载列表
   autoName: 'index.html', // 自动增加扩展名
   saveTo: './spider/',    // 下载文件保存路径
-  saveReplace: '',        // 保存时仅保存该路径下内容
+  savePathIgnore: '',        // 保存时仅保存该路径下内容
   request: undefined,     // request时带有的参数
-  // autoDetective: true,   // 是否自动根据html引入文件
-  // saveSpider: true,      // 保存文件下载历史
+  autoLinks: true,       // 是否自动根据html引入文件
+  saveHistory: true,      // 保存文件下载历史
   // autoEncode: true,     // 自动将文件编码转换为utf8
-  // autoConvertRelative: true  // 将文件引用地址转换为相对地址
-  // autoCover: true,       // 已经存在文件则覆盖
+  // autoExit:   true      // 下载完毕自动退出程序
+  autoRelative: false,  // 将文件引用地址转换为相对地址
+  autoCover: true,       // 已经存在文件则覆盖
   deep: 10,               // 最多加载深度
   speed: 10,              // 同时下载多少个文件
   reTryTime: 10,          // 最多重试次数
@@ -39,6 +40,7 @@ var defaultTemp = {
   list: [] // 链接列表
 };
 
+const listenEvent = ['before_save'];
 class Spider extends Event {
   constructor (_config) {
     super()
@@ -82,10 +84,13 @@ class Spider extends Event {
    * 保存下载记录
    * */
   save (isRightNow) {
-    this.db.list = this.list;
-    this.db.links = this.links;
-    this.db.config = this.config;
-    this.db.$save(isRightNow)
+    if(this.config.saveHistory) {
+      this.db.list = this.list;
+      this.db.links = this.links;
+      this.db.config = this.config;
+      this.db.$save(isRightNow)
+    }
+    return this;
   }
 
   /**
@@ -96,6 +101,7 @@ class Spider extends Event {
    * @return file: 文件对象或者false(返回false表示不符合添加规范)
    * */
   push (href, old) {
+    var me = this;
     debug('push', href, old && old.href)
     if(!href) return false;
     if(old && old.deep >= this.config.deep){
@@ -112,8 +118,15 @@ class Spider extends Event {
       return false;
     }
     if(this.links[file.link]) return this.links[file.link]
+    this.emit('push_before', file)
+    if(!file.link) return false
     this.links[file.link] = file
     this.list.push(file.link)
+    listenEvent.forEach(function(event){
+      file.on(event, function(file) {
+        me.emit(event, file)
+      })
+    })
     this.emit('push', file)
     return file;
   }
@@ -130,6 +143,7 @@ class Spider extends Event {
     if (this._needLoaded && this._needLoaded.length > 0) {
       return this._needLoaded.pop()
     }
+    me.emit('load_finish',me)
     return false
   }
   onLoadSuccess(file) {
@@ -139,7 +153,7 @@ class Spider extends Event {
       var index = me.loadList.indexOf(file)
       index >= 0 && me.loadList.splice(index, 1)
       me.emit('loaded', file)
-      if(file.isHTML()) {
+      if(me.config.autoLinks) {
         var links = file.getLinks();
         for(var i = 0; links && i<links.length;i++) {
           me.push(links[i]);
@@ -236,7 +250,7 @@ class Spider extends Event {
     return this
   }
 
-    // 清空下载记录
+  // 清空下载记录
   clean () {
     this.links = {};
     this.list = [];

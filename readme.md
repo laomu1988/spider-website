@@ -21,11 +21,14 @@ var Spider = require('spider-website');
 var index = 'http://laomu1988.github.io/index.html';
 
 var spider = new Spider({url: index, saveTo: __dirname + '/save/'});
-spider.load();
+
 
 spider.on('loaded', function(file) {
     console.log('下载文件:',file.link);
 });
+
+spider.load();
+
 ```
 
 ## config
@@ -42,10 +45,13 @@ spider.on('loaded', function(file) {
 * get(link)   : 取得下载对象
 
 ## event
+* push_before 添加链接前触发，参数(file),将file.link置为空或者false将取消添加链接
 * push      文件加入下载列表时触发,参数(file)
 * load_before 下载文件前触发
 * loaded    下载成功触发, 参数(file,body,response)
 * load_fail 下载失败触发, 参数(file, response || err)
+* before_save 保存到本地前触发
+* load_finish 列表全部下载完毕后触发
 
 ## spider
 * spider.config: 配置内容

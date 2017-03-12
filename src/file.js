@@ -19,7 +19,8 @@ const request = require('request')
 const fs = require('fs')
 const Path = require('path')
 const Hash = require('object-hash')
-const htmlLink = require('ctx-links').html
+const getLinks = require('ctx-links')
+const convert = require('convert-relative')
 const Event = require('events')
 const debug = require('debug')('spider-file')
 const decode = require('iconv-lite').decode;
@@ -57,7 +58,6 @@ class File extends Event {
     me.link = me.protocol + '//' + me.host + me.pathname;
     me.opts = opts || defaultOpts;
     if(!me.saveTo) me.saveTo = me.getSavePath();
-    me.emit('init');
     return me;
   }
   toJSON(){
@@ -77,8 +77,8 @@ class File extends Event {
       pathname += '/' + this.opts.autoName;
       extname = Path.extname(extname);
     }
-    var index = this.opts.saveReplace && pathname.indexOf(this.opts.saveReplace)
-    if (index === 0) pathname = pathname.substr(this.opts.saveReplace.length - 1)
+    var index = this.opts.savePathIgnore && pathname.indexOf(this.opts.savePathIgnore)
+    if (index === 0) pathname = pathname.substr(this.opts.savePathIgnore.length - 1)
     var saveTo = Path.resolve(this.opts.saveTo + '/' + pathname);
     if (isDir(saveTo)) throw new Error('saveTo path is directory...');
     return saveTo;
@@ -106,8 +106,8 @@ class File extends Event {
           headers: headers,
           encoding: null
         }, me.opts.request,me.data ? me.data.request : null);
-        debug('request:',params);
-        request(params, function (err, response, body) {
+        // debug('request:',params);
+        request(params, function (err, response) {
           debug('response:', err, response.statusCode)
           if (err || response.statusCode !== 200) {
             me.loadState = 3;
@@ -118,17 +118,24 @@ class File extends Event {
             try {
               mkdir(me.saveTo.substr(0, me.saveTo.lastIndexOf('/')))
               var hash = me.hash;
-              if(me.opts.isGBK) {
-                response.body = decode(response.body, 'gbk');
+              let body = response.body
+              if(me.opts.isGBK && me.isText()) {
+                body = decode(body, 'gbk');
               }
-              me.hash = Hash(response.body + '')
+              me.hash = Hash(body + '')
               me.response = response;
-              me.body = response.body;
               me.loadState = 2;
-              if(me.hash != hash) response.hasUpdated = true;
-              if(me.saveTo) {
+              if (me.hash != hash) response.hasUpdated = true;
+              if (me.opts.autoRelative && me.isHTML()) {
+                let result = convert.html(body + '', me.href)
+                debug('autoRelative', me.href, result.changed)
+                debug('autoRelative:', result.links)
+                body = result.html
+              }
+              me.body = body
+              if (me.saveTo) {
                 me.emit('before_save', me)
-                fs.writeFileSync(me.saveTo, body)
+                fs.writeFileSync(me.saveTo, me.body)
               }
               resolve(me)
             } catch (e) {
@@ -157,7 +164,7 @@ class File extends Event {
       if(/text|json|utf|gbk/.test(contentType)) return true;
       if(contentType.indexOf('image') >= 0) return false;
     }
-    if(/(\.png|\.jpg|\.gif|\.woff|\.ico)/.test(this.saveTo)) return false;
+    if(/(\.png|\.jpg|\.gif|\.woff|\.ico|\.ttf|\.eot)/.test(this.saveTo)) return false;
     if(/(\.htm|\.js|\.css|\.svg)/.test(this.saveTo)) return true;
     return false;
   }
@@ -167,7 +174,25 @@ class File extends Event {
       debug('html-content-type:',contentType);
       if(/htm/.test(contentType)) return true;
     }
-    if(/(\.htm)/.test(this.saveTo)) return false;
+    if(/(\.htm)/.test(this.saveTo)) return true;
+    return false;
+  }
+  isCss() {
+    if(this.response) {
+      var contentType = this.response.headers['content-type'];
+      debug('html-content-type:',contentType);
+      if(/css/.test(contentType)) return true;
+    }
+    if(/(\.css)/.test(this.saveTo)) return true;
+    return false;
+  }
+  isJs() {
+    if(this.response) {
+      var contentType = this.response.headers['content-type'];
+      debug('html-content-type:',contentType);
+      if(/javascript/.test(contentType)) return true;
+    }
+    if(/(\.js)/.test(this.saveTo)) return true;
     return false;
   }
   getLinks() {
@@ -175,9 +200,9 @@ class File extends Event {
     var body = this.getBody() + '';
     debug('links,body');
     if(body) {
-      var links = htmlLink(body, this.href);
-      debug('links:',links[0],links.length)
-      return links;
+      if(this.isHTML()) return getLinks.html(body, this.href);
+      if(this.isCss()) return getLinks.css(body, this.href);
+      return false;
     }
     return false;
   }
