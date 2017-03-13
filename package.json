@@ -1,6 +1,6 @@
 {
   "name": "spider-website",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "spider website",
   "main": "lib/spider.js",
   "bin": {
